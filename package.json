@@ -4,7 +4,7 @@
   "description": "Migration tool to import Stormpath data into an Okta tenant",
   "license": "Apache-2.0",
   "bin": {
-    "import-stormpath": "./bin/migrate.js",
+    "import-stormpath": "./bin/migrate-launcher.js",
     "reset-okta": "./bin/reset.js"
   },
   "scripts": {
