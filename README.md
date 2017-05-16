@@ -116,3 +116,13 @@ indicate where the JSON log file was written to.
 
 - Options: `error`, `warn`, `info`, `verbose`, `debug`, `silly`
 - Example: `--logLevel verbose`
+
+### Organization Reset
+
+If you need to run the import script again, but wish to start with a blank slate, this tool also provides a reset script that will remove all data from your org. The reset script takes the same arguments as the import script.
+
+**WARNING: This will delete all data from the specified org:**
+
+```bash
+reset-okta --stormPathBaseDir /path/to/export/data --oktaBaseUrl https://your-org.okta.com --oktaApiToken 5DSfsl4x@3Slt6
+```
