@@ -135,6 +135,14 @@ class SchemaProperties {
     schemaTypeMap[statusKey] = 'string';
     properties[statusKey] = statusSchema;
 
+    const hrefKey = 'stormpathHref';
+    const hrefSchema = getSchemaProperty(hrefKey, 'string');
+    hrefSchema.title = 'Stormpath Account Href';
+    hrefSchema.description = 'The href of this account from Stormpath';
+    hrefSchema.maxLength = 64;
+    schemaTypeMap[hrefKey] = 'string';
+    properties[hrefKey] = hrefSchema;
+
     return { properties, schemaTypeMap };
   }
 

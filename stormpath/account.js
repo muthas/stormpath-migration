@@ -283,6 +283,8 @@ class Account extends Base {
       emailVerificationStatus: this.emailVerificationStatus
     });
 
+    profileAttributes.stormpathHref = this.href;
+
     const customData = this.getCustomData();
     const invalid = [];
     Object.keys(customData).forEach((key) => {
