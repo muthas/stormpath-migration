@@ -18,7 +18,7 @@ var major = parseInt(matches[1]);
 
 var minor = parseInt(matches[2]);
 
-if (major >= 7 && minor >= 6) {
+if ((major >= 7 && minor >= 6) || major >= 8) {
   require('./migrate');
 } else {
   console.error('Node v7.6 or greater is required');
