@@ -13,7 +13,7 @@ const logger = require('../util/logger');
 const rs = require('../util/request-scheduler');
 const ApiError = require('../util/api-error');
 
-const AS_PATH = '/api/v1/as';
+const AS_PATH = '/api/v1/authorizationServers';
 
 async function getExistingAuthorizationServer(name) {
   logger.verbose(`Getting existing authorization server name=${name}`);
@@ -43,7 +43,7 @@ async function createNewAuthorizationServer(name, description, defaultResourceUr
       body: {
         name,
         description,
-        defaultResourceUri,
+        audiences: [defaultResourceUri],
       }
     });
     logger.created(`AuthorizationServer id=${as.id} name=${name}`);
