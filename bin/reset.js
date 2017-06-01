@@ -18,6 +18,9 @@ const ConcurrencyPool = require('../util/concurrency-pool');
 const ApiError = require('../util/api-error');
 
 logger.setLevel(config.logLevel);
+
+const AS_PATH = '/api/v1/authorizationServers';
+
 const pool = new ConcurrencyPool(config.concurrencyLimit);
 
 async function deleteCustomSchema() {
@@ -128,11 +131,12 @@ async function deleteClients() {
 
 async function deleteAuthorizationServers() {
   logger.header('Deleting authorization servers');
-  const servers = await rs.get('/api/v1/as');
+  const servers = await rs.get(AS_PATH);
   logger.info(`Found ${servers.length} authorization servers`);
-  return pool.each(servers, async (as) => {
+  const asPool = new ConcurrencyPool(1);
+  return asPool.each(servers, async (as) => {
     try {
-      await rs.delete(`/api/v1/as/${as.id}`);
+      await rs.delete(`${AS_PATH}/${as.id}`);
       logger.info(`Deleted authorization server id=${as.id} name=${as.name}`);
     } catch (err) {
       logger.error(new ApiError(`Error deleting authorization server id=${as.id} name=${as.name}`, err));
