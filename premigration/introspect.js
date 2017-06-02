@@ -74,6 +74,24 @@ async function introspect() {
     logger.warn(`Skipped ${numUnverified} unverified accounts.`);
   }
 
+  const problemAccounts = unifiedAccounts.getProblemUsernameAccounts();
+  if (problemAccounts.length > 0) {
+    const lg = logger.group('Found stormpath usernames that conflict with other account usernames', 'error');
+    for (let account of problemAccounts) {
+      const username = account.account.username;
+      const original = username.replace('@emailnotprovided.local', '');
+      const id = account.account.id;
+      const sg = logger.group(`id=${id} orig_username=${original} new_username=${username}`, 'error');
+      for (let conflict of account.conflicts) {
+        logger.error(`Conflicts with id=${id} username=${conflict.username}`);
+      }
+      sg.end();
+    }
+    logger.error('Fix this by updating these usernames to emails, or contacting Okta support.');
+    lg.end();
+
+  }
+
   cache.unifiedAccounts = unifiedAccounts;
 
   const schema = schemaProperties.getSchema();

@@ -164,8 +164,11 @@ logger.setLevel = (level) => {
   logger.transports.console.level = level;
 };
 
-logger.group = (title) => {
-  logger.from(title);
+logger.group = (title, type) => {
+  if (!type) {
+    type = 'from';
+  }
+  logger[type](title);
   indent++;
   return {
     end: () => indent--

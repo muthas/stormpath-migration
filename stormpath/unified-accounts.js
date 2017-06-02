@@ -15,12 +15,18 @@ function warn(account, msg) {
   logger.warn(`Account id=${account.id} email=${account.email} ${msg}`);
 }
 
+function getEmailPrefix(email) {
+  return email.substring(0, email.indexOf('@'));
+}
+
 class UnifiedAccounts {
 
   constructor(accountLinks) {
     this.accountLinks = accountLinks;
     this.emailMap = {};
     this.stormpathAccountIdMap = {};
+    this.loginPrefixAccountMap = {};
+    this.convertedLoginAccounts = [];
   }
 
   addAccount(account) {
@@ -52,9 +58,31 @@ class UnifiedAccounts {
       return emailAccount;
     }
 
+    // By default, an Okta login must be formatted as an email address. If the
+    // Stormpath username is not an email address, convert it by appending
+    // @emailnotprovided.local.
+    //
+    // This will normally be okay for most cases - the email domain is not
+    // necessary for a login lookup. However, for more complicated cases,
+    // contact support to enable the REMOVE_EMAIL_FORMAT_LOGIN_RESTRICTION flag.
+    if (!account.username.includes('@')) {
+      const updated = `${account.username}@emailnotprovided.local`;
+      logger.warn(`Account id=${account.id} username=${account.username} username is not an email. Using username=${updated}.`);
+      account.username = updated;
+      this.convertedLoginAccounts.push(account);
+    }
+
+
     logger.silly(`Adding new account id=${account.id}`);
     this.emailMap[account.email] = account;
     this.stormpathAccountIdMap[account.id] = account;
+
+    const loginPrefix = getEmailPrefix(account.username);
+    if (!this.loginPrefixAccountMap[loginPrefix]) {
+      this.loginPrefixAccountMap[loginPrefix] = [];
+    }
+    this.loginPrefixAccountMap[loginPrefix].push(account);
+
     return account;
   }
 
@@ -87,6 +115,41 @@ class UnifiedAccounts {
       }
     }
     return userIds;
+  }
+
+  /**
+   * Problem usernames are defined as:
+   * - Originally not an email address (@emailnotprovided.local appended)
+   * - Have the same login prefix as another Stormpath username.
+   *
+   * For example, for two accounts:
+   * - username1: susan -> susan@emailnotprovided.local
+   * - username2: susan@example.com
+   *
+   * When logging in, susan@example.com will be used to logging in with the
+   * previous 'susan@example.com' username. She is fine.
+   *
+   * However, susan@emailnotprovided.local will be used to logging in as
+   * 'susan'. However, her new login is 'susan@emailnotprovided.local'.
+   *
+   * Note: If susan@example.com does not exist, susan@emailnotprovided.local
+   * will be able to login with either 'susan' or 'susan@emailnotprovided.local'.
+   * The domain is only necessary when there are multiple users with the same
+   * login prefix.
+   */
+  getProblemUsernameAccounts() {
+    const problems = [];
+    for (let account of this.convertedLoginAccounts) {
+      const prefix = getEmailPrefix(account.username);
+      const prefixAccounts = this.loginPrefixAccountMap[prefix];
+      const conflicts = prefixAccounts.filter((prefixAccount) => {
+        return prefixAccount.id !== account.id;
+      });
+      if (conflicts.length > 0) {
+        problems.push({ account, conflicts });
+      }
+    }
+    return problems;
   }
 
 }
