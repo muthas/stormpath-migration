@@ -139,7 +139,7 @@ class SchemaProperties {
     const hrefSchema = getSchemaProperty(hrefKey, 'string');
     hrefSchema.title = 'Stormpath Account Href';
     hrefSchema.description = 'The href of this account from Stormpath';
-    hrefSchema.maxLength = 64;
+    hrefSchema.maxLength = 128;
     schemaTypeMap[hrefKey] = 'string';
     properties[hrefKey] = hrefSchema;
 
