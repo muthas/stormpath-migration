@@ -15,6 +15,10 @@ const ApiError = require('../util/api-error');
 
 const USERS_PATH = '/api/v1/users';
 
+function getIdFromStormpathHref(href) {
+  return href.substring(href.lastIndexOf('/') + 1);
+}
+
 async function getExistingUser(profile) {
   try {
     const users = await rs.get({
@@ -44,7 +48,8 @@ async function updateExistingUser(user, profile) {
       url: `${USERS_PATH}/${user.id}`,
       body: user
     });
-    logger.updated(`User id=${user.id} login=${profile.login}`);
+    const stormpathAccountId = getIdFromStormpathHref(profile.stormpathHref);
+    logger.updated(`okta_user_id=${user.id}, login=${profile.login}, stormpath_account_id=${stormpathAccountId}`);
     return updated;
   } catch (err) {
     throw new ApiError(`Failed to update okta user id=${user.id} login=${profile.login}`, err);
@@ -61,7 +66,8 @@ async function createNewUser(profile, credentials) {
         credentials
       }
     });
-    logger.created(`User id=${user.id} login=${profile.login}`);
+    const stormpathAccountId = getIdFromStormpathHref(profile.stormpathHref);
+    logger.created(`okta_user_id=${user.id}, login=${profile.login}, stormpath_account_id=${stormpathAccountId}`);
     activate = await rs.post({
       url: `${USERS_PATH}/${user.id}/lifecycle/activate?sendEmail=false`
     });
