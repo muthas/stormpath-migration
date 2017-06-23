@@ -21,6 +21,11 @@ const config = require('../util/config');
 const addGroupsToApp = require('../functions/add-groups-to-app');
 const cache = require('./util/cache');
 
+function getAppIdFromClient(client) {
+  const parts = client._links.app.href.split('/');
+  return parts[parts.length - 1];
+}
+
 async function getAccountStoreMap() {
   const mappings = await stormpathExport.getAccountStoreMappings();
   logger.info(`Processing ${mappings.length} account store mappings`);
@@ -55,8 +60,7 @@ async function getAccountStoreMap() {
 }
 
 async function addGroupsToApplication(application, client) {
-  const parts = client._links.app.href.split('/');
-  const appInstanceId = parts[parts.length - 1];
+  const appInstanceId = client.client_id ? client.client_id : getAppIdFromClient(client);
 
   const groupIds = cache.accountStoreMap[application.id];
   if (!groupIds || groupIds.length === 0) {
