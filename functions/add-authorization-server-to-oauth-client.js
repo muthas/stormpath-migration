@@ -24,7 +24,7 @@ async function addAuthorizationServerToOAuthClient(as, client) {
   const details = `Authorization Server id=${as.id} to OAuth Client client_id=${client.client_id}`;
   logger.verbose(`Trying to add ${details}`);
   try {
-    const appId = getAppIdFromClient(client);
+    const appId = client.client_id ? client.client_id : getAppIdFromClient(client);
     const app = await rs.get(`${APPS_PATH}/${appId}`);
     if (app.settings.notifications.vpn.message === as.id) {
       logger.exists(details);
