@@ -11,7 +11,6 @@
  */
 const logger = require('../util/logger');
 const UnifiedAccounts = require('../stormpath/unified-accounts');
-const SchemaProperties = require('../util/schema-properties');
 const config = require('../util/config');
 const stormpathExport = require('../stormpath/stormpath-export');
 const cache = require('../migrators/util/cache');
@@ -34,38 +33,47 @@ async function introspect() {
   logger.header('Introspecting stormpath export');
   const directoryProviders = await getDirectoryProviders();
   const accountLinks = await stormpathExport.getAccountLinks();
-  const schemaProperties = new SchemaProperties();
   const unifiedAccounts = new UnifiedAccounts(accountLinks);
+  let totalCount = 0;
   let numADLDAPAccounts = 0;
   let numUnverified = 0;
 
-  const accounts = await stormpathExport.getAccounts();
+  const skipAccounts = await unifiedAccounts.restore();
+  const accounts = await stormpathExport.getAccounts(skipAccounts);
+
   logger.info(`Pre-processing ${accounts.length} stormpath accounts`);
   await accounts.each((account) => {
     try {
       const providerId = directoryProviders[account.directory.id];
       if (!providerId) {
+        unifiedAccounts.discardAccount(account);
         return logger.error(`Missing directory id=${account.directory.id}. Skipping account id=${account.id}.`);
       }
       if (providerId === 'ad' || providerId === 'ldap') {
         numADLDAPAccounts++;
+        unifiedAccounts.discardAccount(account);
         return logger.verbose(`Skipping account id=${account.id}. Import using the Okta ${providerId.toUpperCase()} agent.`);
       }
       if (account.status === 'UNVERIFIED') {
         numUnverified++;
+        unifiedAccounts.discardAccount(account);
         return logger.verbose(`Skipping unverified account id=${account.id}`);
       }
-      let unifiedAccount = unifiedAccounts.addAccount(account);
-      if (unifiedAccount) {
-        const customData = unifiedAccount.getCustomData();
-        Object.keys(customData).forEach((key) => {
-          schemaProperties.add(key, customData[key].type);
-        });
+
+      unifiedAccounts.addAccount(account);
+
+      totalCount++;
+      if (totalCount % config.checkpointLimit === 0) {
+        logger.info(`Saving checkpoint after processing ${totalCount} accounts`);
+        unifiedAccounts.save();
       }
     } catch (err) {
       logger.error(err);
     }
   });
+
+  // Save any remaining accounts to the checkpoint
+  unifiedAccounts.save();
 
   if (numADLDAPAccounts > 0) {
     logger.warn(`Skipped ${numADLDAPAccounts} AD or LDAP accounts. Import using the Okta AD or LDAP agent.`);
@@ -78,23 +86,21 @@ async function introspect() {
   if (problemAccounts.length > 0) {
     const lg = logger.group('Found stormpath usernames that conflict with other account usernames', 'error');
     for (let account of problemAccounts) {
-      const username = account.account.username;
+      const username = account.username;
       const original = username.replace('@emailnotprovided.local', '');
-      const id = account.account.id;
-      const sg = logger.group(`id=${id} orig_username=${original} new_username=${username}`, 'error');
+      const sg = logger.group(`id=${account.id} orig_username=${original} new_username=${username}`, 'error');
       for (let conflict of account.conflicts) {
-        logger.error(`Conflicts with id=${id} username=${conflict.username}`);
+        logger.error(`Conflicts with id=${conflict.id} username=${conflict.username}`);
       }
       sg.end();
     }
     logger.error('Fix this by updating these usernames to emails, or contacting Okta support.');
     lg.end();
-
   }
 
   cache.unifiedAccounts = unifiedAccounts;
 
-  const schema = schemaProperties.getSchema();
+  const schema = unifiedAccounts.getSchema();
   cache.customSchemaProperties = schema.properties;
   cache.customSchemaTypeMap = schema.schemaTypeMap;
 

@@ -10,30 +10,35 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
+const Account = require('./account');
 const JsonCheckpoint = require('../util/checkpoint').JsonCheckpoint;
-const config = require('../util/config');
 
-class Base extends JsonCheckpoint {
+class AccountRef extends JsonCheckpoint {
 
-  constructor(filePath) {
+  constructor(id) {
     super();
-    this.filePath = filePath;
+    this.id = id;
   }
 
   checkpointConfig() {
     return {
-      path: this.filePath.replace(`${config.stormPathBaseDir}/`, '').replace('.json', ''),
-      props: Object.keys(this)
+      path: `account-refs/${this.id}`,
+      props: ['id', 'oktaUserId', 'username', 'email', 'accountFilePath']
     };
   }
 
-  /**
-   * Override this to perform initialization options that only happen when
-   * loading from the export. Any properties that are created will be saved
-   * to the checkpoint file.
-   */
-  initializeFromExport() {}
+  getAccount() {
+    const account = new Account(this.accountFilePath);
+    account.restore();
+    return account;
+  }
+
+  async getAccountAsync() {
+    const account = new Account(this.accountFilePath);
+    await account.restoreAsync();
+    return account;
+  }
 
 }
 
-module.exports = Base;
+module.exports = AccountRef;

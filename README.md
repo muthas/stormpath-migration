@@ -112,6 +112,12 @@ indicate where the JSON log file was written to.
 
 **--maxFiles (-f)** Max number of files to parse per directory. Use to preview the entire import.
 
+**--fileOpenLimit** Max number of files to read at any given time. Override if seeing an EMFILE error.
+
+**--checkpointLimit** Number of accounts to process before saving a checkpoint
+
+**--checkpointDir** Directory to save checkpoint files to
+
 **--logLevel (-l)** Logging level. Defaults to `info`.
 
 - Options: `error`, `warn`, `info`, `verbose`, `debug`, `silly`

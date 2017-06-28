@@ -9,6 +9,10 @@
  *
  * See the License for the specific language governing permissions and limitations under the License.
  */
+const AccountRef = require('./account-ref');
+const SchemaProperties = require('../util/schema-properties');
+const LogCheckpoint = require('../util/checkpoint').LogCheckpoint;
+const config = require('../util/config');
 const logger = require('../util/logger');
 
 function warn(account, msg) {
@@ -27,6 +31,65 @@ class UnifiedAccounts {
     this.stormpathAccountIdMap = {};
     this.loginPrefixAccountMap = {};
     this.convertedLoginAccounts = [];
+    this.schemaProperties = new SchemaProperties();
+    this.processedLog = new LogCheckpoint('account-meta/processed-accounts');
+    this.discardLog = new LogCheckpoint('account-meta/discard-accounts');
+    this.convertedLoginLog = new LogCheckpoint('account-meta/converted-logins');
+  }
+
+  discardAccount(account) {
+    this.discardLog.add(account.id);
+  }
+
+  save() {
+    this.schemaProperties.save();
+    this.discardLog.save();
+    this.convertedLoginLog.save();
+    this.processedLog.save();
+  }
+
+  async restore() {
+    const skipAccounts = {};
+    let numSkipAccounts = 0;
+
+    await this.processedLog.processAsync(async (accountId) => {
+      const accountRef = new AccountRef(accountId);
+      await accountRef.restoreAsync();
+      this.setMaps(accountRef);
+      skipAccounts[accountRef.id] = true;
+      numSkipAccounts++;
+      if (numSkipAccounts % config.checkpointLimit === 0) {
+        logger.verbose(`Loaded ${numSkipAccounts} processed accounts`);
+      }
+    }, config.fileOpenLimit);
+
+    this.discardLog.process((accountId) => {
+      skipAccounts[accountId] = true;
+      numSkipAccounts++;
+    });
+
+    if (numSkipAccounts > 0) {
+      logger.info(`Found saved data for ${numSkipAccounts} processed accounts`);
+    }
+
+    await this.schemaProperties.restoreAsync();
+
+    this.convertedLoginLog.process((accountId) => {
+      this.convertedLoginAccounts.push(this.stormpathAccountIdMap[accountId]);
+    });
+
+    return skipAccounts;
+  }
+
+  setMaps(accountRef) {
+    this.emailMap[accountRef.email] = accountRef;
+    this.stormpathAccountIdMap[accountRef.id] = accountRef;
+
+    const loginPrefix = getEmailPrefix(accountRef.username);
+    if (!this.loginPrefixAccountMap[loginPrefix]) {
+      this.loginPrefixAccountMap[loginPrefix] = [];
+    }
+    this.loginPrefixAccountMap[loginPrefix].push(accountRef);
   }
 
   addAccount(account) {
@@ -38,25 +101,39 @@ class UnifiedAccounts {
     for (let linkedAccount of linkedAccounts) {
       if (linkedAccount && linkedAccount.email !== account.email) {
         warn(account, `is linked to id=${linkedAccount.id} email=${linkedAccount.email}, but email is different. Skipping.`);
+        this.discardAccount(account);
         return;
       }
     }
 
     // Verify account does not have the same email as a previously processed
     // account that it is not linked to
-    const emailAccount = this.emailMap[account.email];
-    if (emailAccount && !linkedAccountIds.includes(emailAccount.id)) {
-      warn(account, `has same email address as id=${emailAccount.id}, but is not linked. Skipping.`);
+    const emailAccountRef = this.emailMap[account.email];
+    if (emailAccountRef && !linkedAccountIds.includes(emailAccountRef.id)) {
+      warn(account, `has same email address as id=${emailAccountRef.id}, but is not linked. Skipping.`);
+      this.discardAccount(account);
       return;
     }
 
     // If there is an existing account, merge it and return the merged account
-    if (emailAccount) {
+    if (emailAccountRef) {
+      const emailAccount = emailAccountRef.getAccount();
+      emailAccount.restore();
       emailAccount.merge(account);
-      this.stormpathAccountIdMap[account.id] = emailAccount;
-      logger.info(`Merged account id=${account.id} email=${account.email} into linked account id=${emailAccount.id}`);
-      return emailAccount;
+      emailAccount.save();
+      this.stormpathAccountIdMap[account.id] = emailAccountRef;
+      this.addSchemaProperties(emailAccount);
+      logger.info(`Merged account id=${account.id} email=${account.email} into linked account id=${emailAccountRef.id}`);
+      this.discardAccount(account);
+      return;
     }
+
+    const accountRef = new AccountRef(account.id);
+    accountRef.setProperties({
+      email: account.email,
+      username: account.username,
+      accountFilePath: account.filePath
+    });
 
     // By default, an Okta login must be formatted as an email address. If the
     // Stormpath username is not an email address, convert it by appending
@@ -69,37 +146,29 @@ class UnifiedAccounts {
       const updated = `${account.username}@emailnotprovided.local`;
       logger.warn(`Account id=${account.id} username=${account.username} username is not an email. Using username=${updated}.`);
       account.username = updated;
-      this.convertedLoginAccounts.push(account);
+      accountRef.setProperties({ username: updated });
+      this.convertedLoginAccounts.push(accountRef);
+      this.convertedLoginLog.add(accountRef.id);
     }
-
 
     logger.silly(`Adding new account id=${account.id}`);
-    this.emailMap[account.email] = account;
-    this.stormpathAccountIdMap[account.id] = account;
-
-    const loginPrefix = getEmailPrefix(account.username);
-    if (!this.loginPrefixAccountMap[loginPrefix]) {
-      this.loginPrefixAccountMap[loginPrefix] = [];
-    }
-    this.loginPrefixAccountMap[loginPrefix].push(account);
-
-    return account;
+    this.setMaps(accountRef);
+    account.save();
+    accountRef.save();
+    this.addSchemaProperties(account);
+    this.processedLog.add(accountRef.id);
   }
 
   getAccounts() {
     return Object.values(this.emailMap);
   }
 
-  getAccountsByEmail() {
-    return this.emailMap;
-  }
-
   getUserIdByAccountId(accountId) {
-    const account = this.stormpathAccountIdMap[accountId];
-    if (!account) {
+    const accountRef = this.stormpathAccountIdMap[accountId];
+    if (!accountRef) {
       return null;
     }
-    return account.getOktaUserId();
+    return accountRef.oktaUserId;
   }
 
   getMissingAccounts(accountIds) {
@@ -139,17 +208,32 @@ class UnifiedAccounts {
    */
   getProblemUsernameAccounts() {
     const problems = [];
-    for (let account of this.convertedLoginAccounts) {
-      const prefix = getEmailPrefix(account.username);
-      const prefixAccounts = this.loginPrefixAccountMap[prefix];
-      const conflicts = prefixAccounts.filter((prefixAccount) => {
-        return prefixAccount.id !== account.id;
+    for (const accountRef of this.convertedLoginAccounts) {
+      const prefix = getEmailPrefix(accountRef.username);
+      const prefixAccountRefs = this.loginPrefixAccountMap[prefix];
+      const conflicts = prefixAccountRefs.filter((prefixAccountRef) => {
+        return prefixAccountRef.id !== accountRef.id;
       });
       if (conflicts.length > 0) {
-        problems.push({ account, conflicts });
+        problems.push({
+          id: accountRef.id,
+          username: accountRef.username,
+          conflicts
+        });
       }
     }
     return problems;
+  }
+
+  addSchemaProperties(account) {
+    const customData = account.getCustomData();
+    Object.keys(customData).forEach((key) => {
+      this.schemaProperties.add(key, customData[key].type);
+    });
+  }
+
+  getSchema() {
+    return this.schemaProperties.getSchema();
   }
 
 }

@@ -49,20 +49,18 @@ class ConcurrencyPool {
     return promise;
   }
 
-  async each(list, fn) {
-    const promises = list.map(async (item) => {
+  each(list, fn) {
+    return allSettled(list.map(async (item) => {
       const resource = await this.acquire();
-      const res = await fn(item);
-      resource.release();
-      return res;
-    });
-    try {
-      return await Promise.all(promises);
-    } catch (err) {
-      this.pending.forEach(item => item.reject());
-      await allSettled(promises);
-      throw new Error(err);
-    }
+      try {
+        const res = await fn(item);
+        resource.release();
+        return res;
+      } catch (e) {
+        this.pending.forEach(item => item.reject());
+        throw e;
+      }
+    }));
   }
 
   async mapToObject(list, fn) {

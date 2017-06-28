@@ -9,6 +9,7 @@
  *
  * See the License for the specific language governing permissions and limitations under the License.
  */
+const JsonCheckpoint = require('./checkpoint').JsonCheckpoint;
 const logger = require('./logger');
 
 const HIDDEN_FIELDS = [
@@ -70,10 +71,18 @@ function compareKeys(key1, key2) {
   return Number(key1.replace(apiKey, '')) - Number(key2.replace(apiKey, ''));
 }
 
-class SchemaProperties {
+class SchemaProperties extends JsonCheckpoint {
 
   constructor() {
+    super();
     this.properties = {};
+  }
+
+  checkpointConfig() {
+    return {
+      path: 'account-meta/schema',
+      props: ['properties']
+    };
   }
 
   add(key, type) {

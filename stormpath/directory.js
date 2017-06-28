@@ -120,11 +120,10 @@ function loadUserInfoMappingRules(directory) {
 
 class Directory extends Base {
 
-  constructor(filePath, json) {
-    super(filePath, json);
-    this.passwordPolicy = loadPasswordPolicy(json);
-    this.attributeMappings = loadUserInfoMappingRules(json);
-    if (json.provider.providerId === 'saml') {
+  initializeFromExport() {
+    this.passwordPolicy = loadPasswordPolicy(this);
+    this.attributeMappings = loadUserInfoMappingRules(this);
+    if (this.provider.providerId === 'saml') {
       this.signingCert = this.provider.encodedX509SigningCert
         .replace('-----BEGIN CERTIFICATE-----\n', '')
         .replace('\n-----END CERTIFICATE-----', '');

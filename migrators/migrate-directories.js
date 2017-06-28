@@ -62,6 +62,7 @@ async function migrateSocial(type, directory) {
   cache.directoryIdpMap[directory.id] = idp.id;
   await addUsersFromDirectory(directory.id);
   return linkUsersFromSocialDirectory(directory.id);
+
 }
 
 async function migrateSaml(directory) {

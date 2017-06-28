@@ -35,7 +35,7 @@ class StormpathExport {
     return accountLinks;
   }
 
-  async getAccounts() {
+  async getAccounts(skipAccounts) {
     const apiKeys = new FileIterator(`${this.baseDir}/apiKeys`, Base);
     logger.verbose(`Mapping ${apiKeys.length} apiKeys to accounts`);
     const accountApiKeys = await apiKeys.mapToObject((apiKey, map) => {
@@ -48,7 +48,7 @@ class StormpathExport {
       }
       map[accountId].push({ id: apiKey.id, secret: apiKey.secret });
     });
-    return new FileIterator(`${this.baseDir}/accounts`, Account, { accountApiKeys });
+    return new FileIterator(`${this.baseDir}/accounts`, Account, { accountApiKeys }, skipAccounts);
   }
 
   getDirectories() {

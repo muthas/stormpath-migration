@@ -19,18 +19,20 @@ const cache = require('./util/cache');
 async function migrateAccounts() {
   logger.header(`Starting users import`);
   const pool = new ConcurrencyPool(config.concurrencyLimit);
-  const accounts = cache.unifiedAccounts.getAccounts();
-  logger.info(`Importing ${accounts.length} unified Stormpath accounts`);
+  const accountRefs = cache.unifiedAccounts.getAccounts();
+  logger.info(`Importing ${accountRefs.length} unified Stormpath accounts`);
   try {
-    await pool.each(accounts, async (account) => {
+    await pool.each(accountRefs, async (accountRef) => {
       try {
+        const account = await accountRef.getAccountAsync();
         const user = await createOktaUser(
           account.getProfileAttributes(),
           account.getCredentials(),
           account.getStatus()
         );
-        account.setOktaUserId(user.id);
-        cache.userIdAccountMap[user.id] = account;
+        accountRef.setProperties({ oktaUserId: user.id });
+        await accountRef.saveAsync();
+        cache.userIdAccountMap[user.id] = accountRef;
         for (let directoryId of account.directoryIds) {
           if (!cache.directoryUserMap[directoryId]) {
             cache.directoryUserMap[directoryId] = [];
