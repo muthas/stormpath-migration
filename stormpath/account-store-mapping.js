@@ -13,13 +13,10 @@ const Base = require('./base');
 
 class AccountStoreMapping extends Base {
 
-  get accountStoreType() {
+  initializeFromExport() {
     const parts = this.accountStore.href.split('/');
-    return parts[parts.length - 2];
-  }
-
-  get accountStoreId() {
-    return this.accountStore.id;
+    this.accountStoreType = parts[parts.length - 2];
+    this.accountStoreId = this.accountStore.id;
   }
 
 }

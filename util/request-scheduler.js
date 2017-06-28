@@ -22,7 +22,9 @@ const packageJson = require('../package.json');
 // The max number of concurrent requests. Note, this is different from the
 // concurrencyLimit in the config, which defines the max number of concurrent
 // transactions (which can encompass more than one request).
-const REQUEST_CONCURRENCY_LIMIT = 100;
+// Note: Endpoints have different concurrency limits - for example,
+// api/v1/apps/{id}/user/types/default?expand=schema has a limit of 100
+const REQUEST_CONCURRENCY_LIMIT = 70;
 
 /**
  * Calculates the time to schedule the next request in milliseconds - returns 0

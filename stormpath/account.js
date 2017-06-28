@@ -208,8 +208,7 @@ function transformMCFCreds(password, accountIds) {
 
 class Account extends Base {
 
-  constructor(filePath, json, options) {
-    super(filePath, json);
+  initializeFromExport(options) {
     this.apiKeys = options.accountApiKeys[this.id] || [];
     this.accountIds = [this.id];
     this.directoryIds = [this.directory.id];
@@ -359,14 +358,6 @@ class Account extends Base {
     customData['stormpathMigrationRecoveryAnswer'] = transform(this.recoveryAnswer);
 
     return customData;
-  }
-
-  setOktaUserId(oktaUserId) {
-    this.oktaUserId = oktaUserId;
-  }
-
-  getOktaUserId() {
-    return this.oktaUserId;
   }
 
   getExternalIdForDirectory(directoryId) {

@@ -61,9 +61,8 @@ function loadOAuthPolicy(application) {
 
 class Application extends Base {
 
-  constructor(filePath, json) {
-    super(filePath, json);
-    this.tokenLimits = loadOAuthPolicy(json);
+  initializeFromExport() {
+    this.tokenLimits = loadOAuthPolicy(this);
   }
 
 }

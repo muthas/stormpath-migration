@@ -11,6 +11,7 @@
  */
 const yargs = require('yargs');
 const fs = require('fs');
+const path = require('path');
 
 const usage = `
 Migration tool to import Stormpath data into an Okta tenant
@@ -57,6 +58,21 @@ const config = yargs
       description: 'Max number of files to parse per directory. Use to preview the entire import.',
       required: false,
       alias: 'f'
+    },
+    fileOpenLimit: {
+      description: 'Max number of files to read at any given time. Override if seeing an EMFILE error.',
+      required: false,
+      default: 1000
+    },
+    checkpointLimit: {
+      description: 'Number of accounts to process before saving a checkpoint',
+      required: false,
+      default: 10000
+    },
+    checkpointDir: {
+      description: 'Directory to save checkpoint files to',
+      required: false,
+      default: path.resolve(__dirname, '../tmp')
     },
     logLevel: {
       description: 'Logging level',

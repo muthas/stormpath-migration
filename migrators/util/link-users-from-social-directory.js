@@ -31,11 +31,12 @@ function linkUsersFromSocialDirectory(directoryId) {
   const pool = new ConcurrencyPool(config.concurrencyLimit);
   return pool.each(userIds, async (userId) => {
     try {
-      const account = cache.userIdAccountMap[userId]
-      if (!account) {
+      const accountRef = cache.userIdAccountMap[userId];
+      if (!accountRef) {
         return error(userId, idpId, 'No unified account for user');
       }
 
+      const account = accountRef.getAccount();
       const externalId = account.getExternalIdForDirectory(directoryId);
       if (!externalId) {
         return error(userId, idpId, `No externalId found`);
