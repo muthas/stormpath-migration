@@ -82,23 +82,31 @@ indicate where the JSON log file was written to.
 
 ### Required Args
 
-**--stormPathBaseDir (-b)** Root directory where your Stormpath tenant export data lives
+#### `--stormPathBaseDir (-b)`
+
+Root directory where your Stormpath tenant export data lives
 
 - Example: `--stormPathBaseDir ~/Desktop/stormpath-exports/683IDSZVtUQewtFoqVrIEe`
 
-**--oktaBaseUrl (-u)** Base URL of your Okta tenant
+#### `--oktaBaseUrl (-u)`
+
+Base URL of your Okta tenant
 
 - Example: `--oktaBaseUrl https://your-org.okta.com`
 
-**--oktaApiToken (-t)** API token for your Okta tenant (SSWS token)
+#### `--oktaApiToken (-t)`
+
+API token for your Okta tenant (SSWS token)
 
 - Example: `--oktaApiToken 00gdoRRz2HUBdy06kTDwTOiPeVInGKpKfG-H4P_Lij`
 
 ### Optional Args
 
-**--customData (-d)** Strategy for importing Stormpath Account custom data. Defaults to `flatten`.
+#### `--customData (-d)`
 
-- Options
+Strategy for importing Stormpath Account custom data. Defaults to `flatten`.
+
+- Options:
 
   - `flatten` - Add [custom user profile schema properties](http://developer.okta.com/docs/api/resources/schemas.html#user-profile-schema-property-object) for each custom data property. Use this for simple custom data objects.
   - `stringify` - Stringify the Account custom data object into one `customData` [custom user profile schema property](http://developer.okta.com/docs/api/resources/schemas.html#user-profile-schema-property-object). Use this for more complex custom data objects.
@@ -106,19 +114,33 @@ indicate where the JSON log file was written to.
 
 - Example: `--customData stringify`
 
-**--concurrencyLimit (-c)** Max number of concurrent transactions. Defaults to `30`.
+#### `--concurrencyLimit (-c)`
+
+Max number of concurrent transactions. Defaults to `30`.
 
 - Example: `--concurrencyLimit 200`
 
-**--maxFiles (-f)** Max number of files to parse per directory. Use to preview the entire import.
+#### `--maxFiles (-f)`
 
-**--fileOpenLimit** Max number of files to read at any given time. Override if seeing an EMFILE error.
+Max number of files to parse per directory. Use to preview the entire import.
 
-**--checkpointLimit** Number of accounts to process before saving a checkpoint
+#### `--checkpointDir`
 
-**--checkpointDir** Directory to save checkpoint files to
+When the import script starts, it tries to map the Stormpath data model to the Okta model - for example, finding all unique custom schema attributes in the Account objects, or mapping linked Accounts to the same Okta user. For large exports, this can take a long time and sometimes cause memory issues.
 
-**--logLevel (-l)** Logging level. Defaults to `info`.
+This state is saved incrementally to the `--checkpointDir`, which defaults to `{stormpath-migration}/tmp`. If there are errors that cause the import script to fail, you can just re-run the script. It will load this incremental state from the checkpoint directory, and skip the introspection work that completed on the previous run.
+
+#### `--checkpointLimit`
+
+The number of accounts to process before saving the current state to the `--checkpointDir`. This defaults to `10000`, which means that for every 10,000 accounts that are processed, a checkpoint is saved to the checkpoint directory.
+
+#### `--fileOpenLimit`
+
+Max number of files to read in parallel. We use this to limit how many files we open at a given time from the export directory. You should normally not need to override this option unless you see an [EMFILE](https://nodejs.org/api/errors.html#errors_common_system_errors) error in the error logs. Defaults to `1000`.
+
+#### `--logLevel (-l)`
+
+Logging level. Defaults to `info`.
 
 - Options: `error`, `warn`, `info`, `verbose`, `debug`, `silly`
 - Example: `--logLevel verbose`
