@@ -226,6 +226,39 @@ class Account extends Base {
     });
   }
 
+  checkpointConfig() {
+    const config = super.checkpointConfig();
+    config.props = [
+      'id',
+
+      // Our props
+      'apiKeys',
+      'accountIds',
+      'directoryIds',
+      'externalIds',
+      'recoveryAnswer',
+
+      // Profile Attributes
+      'username',
+      'email',
+      'givenName',
+      'middleName',
+      'surname',
+      'fullName',
+      'emailVerificationStatus',
+      'href',
+      'customData',
+      'apiKeys',
+
+      // Credentials
+      'password',
+
+      // Status
+      'status'
+    ];
+    return config;
+  }
+
   /**
    * Merges properties from another account into this account.
    * @param {Account} account

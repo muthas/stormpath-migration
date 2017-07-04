@@ -9,7 +9,7 @@
  *
  * See the License for the specific language governing permissions and limitations under the License.
  */
-const ConcurrencyPool = require('../../util/concurrency-pool');
+const { each } = require('../../util/concurrency');
 const linkUserToSocialIdp = require('../../functions/link-user-to-social-idp');
 const logger = require('../../util/logger');
 const cache = require('./cache');
@@ -28,15 +28,14 @@ function linkUsersFromSocialDirectory(directoryId) {
   }
 
   logger.info(`Linking ${userIds.length} users to Social IdP id=${idpId}`);
-  const pool = new ConcurrencyPool(config.concurrencyLimit);
-  return pool.each(userIds, async (userId) => {
+  return each(userIds, async (userId) => {
     try {
       const accountRef = cache.userIdAccountMap[userId];
       if (!accountRef) {
         return error(userId, idpId, 'No unified account for user');
       }
 
-      const account = accountRef.getAccount();
+      const account = await accountRef.getAccount();
       const externalId = account.getExternalIdForDirectory(directoryId);
       if (!externalId) {
         return error(userId, idpId, `No externalId found`);
@@ -45,7 +44,7 @@ function linkUsersFromSocialDirectory(directoryId) {
     } catch (err) {
       logger.error(err);
     }
-  });
+  }, config.concurrencyLimit);
 }
 
 module.exports = linkUsersFromSocialDirectory;

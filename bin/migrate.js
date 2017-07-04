@@ -29,7 +29,7 @@ logger.info(`Writing log output to ${logger.logFile}`);
 
 async function migrate() {
   try {
-    console.time('migrate');
+    const timer = logger.startTimer();
 
     await introspect();
     await migrateCustomSchema();
@@ -40,8 +40,7 @@ async function migrate() {
     await migrateApplications();
 
     logger.header('Done');
-    logger.info(`Wrote log output to ${logger.logFile}`);
-    console.timeEnd('migrate');
+    timer.done(`Wrote log output to ${logger.logFile}`);
   } catch (err) {
     logger.error(err);
   }

@@ -32,9 +32,9 @@ async function migrateOrg(org) {
   }
 }
 
-function migrateOrganizations() {
+async function migrateOrganizations() {
   logger.header('Starting organizations import');
-  const organizations = stormpathExport.getOrganizations();
+  const organizations = await stormpathExport.getOrganizations();
   logger.info(`Importing ${organizations.length} organizations`);
   return organizations.each(migrateOrg, { limit: 1 });
 }

@@ -19,7 +19,6 @@ const Base = require('./base');
 const Directory = require('./directory');
 const logger = require('../util/logger');
 const config = require('../util/config');
-const ConcurrencyPool = require('../util/concurrency-pool');
 const FileIterator = require('./file-iterator');
 
 class StormpathExport {
@@ -31,12 +30,14 @@ class StormpathExport {
   async getAccountLinks() {
     const accountLinks = new AccountLinks();
     const linkFiles = new FileIterator(`${this.baseDir}/accountLinks`, Base);
+    await linkFiles.initialize();
     await linkFiles.each((file) => accountLinks.addLink(file));
     return accountLinks;
   }
 
   async getAccounts(skipAccounts) {
     const apiKeys = new FileIterator(`${this.baseDir}/apiKeys`, Base);
+    await apiKeys.initialize();
     logger.verbose(`Mapping ${apiKeys.length} apiKeys to accounts`);
     const accountApiKeys = await apiKeys.mapToObject((apiKey, map) => {
       if (apiKey.status !== 'ENABLED') {
@@ -48,27 +49,38 @@ class StormpathExport {
       }
       map[accountId].push({ id: apiKey.id, secret: apiKey.secret });
     });
-    return new FileIterator(`${this.baseDir}/accounts`, Account, { accountApiKeys }, skipAccounts);
+    const accounts = new FileIterator(`${this.baseDir}/accounts`, Account, { accountApiKeys }, skipAccounts);
+    await accounts.initialize();
+    return accounts;
   }
 
-  getDirectories() {
-    return new FileIterator(`${this.baseDir}/directories`, Directory);
+  async getDirectories() {
+    const directories = new FileIterator(`${this.baseDir}/directories`, Directory);
+    await directories.initialize();
+    return directories;
   }
 
-  getApplications() {
-    return new FileIterator(`${this.baseDir}/applications`, Application);
+  async getApplications() {
+    const applications = new FileIterator(`${this.baseDir}/applications`, Application);
+    await applications.initialize();
+    return applications;
   }
 
-  getAccountStoreMappings() {
-    return new FileIterator(`${this.baseDir}/accountStoreMappings`, AccountStoreMapping);
+  async getAccountStoreMappings() {
+    const accountStoreMappings = new FileIterator(`${this.baseDir}/accountStoreMappings`, AccountStoreMapping);
+    await accountStoreMappings.initialize();
+    return accountStoreMappings;
   }
 
-  getGroups() {
-    return new FileIterator(`${this.baseDir}/groups`, Base);
+  async getGroups() {
+    const groups = new FileIterator(`${this.baseDir}/groups`, Base);
+    await groups.initialize();
+    return groups;
   }
 
   async getGroupMembershipMap() {
     const memberships = new FileIterator(`${this.baseDir}/groupMemberships`, Base);
+    await memberships.initialize();
     logger.verbose(`Mapping ${memberships.length} group memberships`);
     return memberships.mapToObject((membership, map) => {
       const groupId = membership.group.id;
@@ -79,12 +91,16 @@ class StormpathExport {
     });
   }
 
-  getOrganizations() {
-    return new FileIterator(`${this.baseDir}/organizations`, Base);
+  async getOrganizations() {
+    const organizations = new FileIterator(`${this.baseDir}/organizations`, Base);
+    await organizations.initialize();
+    return organizations;
   }
 
-  getOrganizationAccountStoreMappings() {
-    return new FileIterator(`${this.baseDir}/organizationAccountStoreMappings`, AccountStoreMapping);
+  async getOrganizationAccountStoreMappings() {
+    const mappings = new FileIterator(`${this.baseDir}/organizationAccountStoreMappings`, AccountStoreMapping);
+    await mappings.initialize();
+    return mappings;
   }
 
 }

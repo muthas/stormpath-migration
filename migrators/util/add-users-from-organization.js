@@ -16,7 +16,7 @@ const config = require('../../util/config');
 const cache = require('./cache');
 
 async function getOrganizationAccountStoreMap() {
-  const mappings = stormpathExport.getOrganizationAccountStoreMappings();
+  const mappings = await stormpathExport.getOrganizationAccountStoreMappings();
   return mappings.mapToObject((mapping, map) => {
     const type = mapping.accountStoreType;
     const id = mapping.accountStoreId;

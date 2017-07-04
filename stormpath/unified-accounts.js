@@ -14,6 +14,7 @@ const SchemaProperties = require('../util/schema-properties');
 const LogCheckpoint = require('../util/checkpoint').LogCheckpoint;
 const config = require('../util/config');
 const logger = require('../util/logger');
+const { each } = require('../util/concurrency');
 
 function warn(account, msg) {
   logger.warn(`Account id=${account.id} email=${account.email} ${msg}`);
@@ -31,6 +32,7 @@ class UnifiedAccounts {
     this.stormpathAccountIdMap = {};
     this.loginPrefixAccountMap = {};
     this.convertedLoginAccounts = [];
+    this.pendingAccountRefs = [];
     this.schemaProperties = new SchemaProperties();
     this.processedLog = new LogCheckpoint('account-meta/processed-accounts');
     this.discardLog = new LogCheckpoint('account-meta/discard-accounts');
@@ -41,42 +43,49 @@ class UnifiedAccounts {
     this.discardLog.add(account.id);
   }
 
-  save() {
-    this.schemaProperties.save();
-    this.discardLog.save();
-    this.convertedLoginLog.save();
-    this.processedLog.save();
+  async save() {
+    await each(
+      this.pendingAccountRefs,
+      ref => ref.save(),
+      config.concurrencyLimit
+    );
+    await Promise.all([
+      this.schemaProperties.save(),
+      this.discardLog.save(),
+      this.convertedLoginLog.save(),
+      this.processedLog.save()
+    ]);
   }
 
   async restore() {
     const skipAccounts = {};
     let numSkipAccounts = 0;
 
-    await this.processedLog.processAsync(async (accountId) => {
+    await this.processedLog.process(async (accountId) => {
       const accountRef = new AccountRef(accountId);
-      await accountRef.restoreAsync();
+      await accountRef.restore();
       this.setMaps(accountRef);
       skipAccounts[accountRef.id] = true;
       numSkipAccounts++;
-      if (numSkipAccounts % config.checkpointLimit === 0) {
-        logger.verbose(`Loaded ${numSkipAccounts} processed accounts`);
+      if (numSkipAccounts % config.checkpointProgressLimit === 0) {
+        logger.info(`Loaded ${numSkipAccounts} processed accounts`);
       }
     }, config.fileOpenLimit);
 
-    this.discardLog.process((accountId) => {
+    await this.discardLog.process((accountId) => {
       skipAccounts[accountId] = true;
       numSkipAccounts++;
-    });
+    }, config.concurrencyLimit);
 
     if (numSkipAccounts > 0) {
       logger.info(`Found saved data for ${numSkipAccounts} processed accounts`);
     }
 
-    await this.schemaProperties.restoreAsync();
+    await this.schemaProperties.restore();
 
-    this.convertedLoginLog.process((accountId) => {
+    await this.convertedLoginLog.process((accountId) => {
       this.convertedLoginAccounts.push(this.stormpathAccountIdMap[accountId]);
-    });
+    }, config.concurrencyLimit);
 
     return skipAccounts;
   }
@@ -92,7 +101,7 @@ class UnifiedAccounts {
     this.loginPrefixAccountMap[loginPrefix].push(accountRef);
   }
 
-  addAccount(account) {
+  async addAccount(account) {
     const linkedAccountIds = this.accountLinks.getLinkedAccounts(account.id);
 
     // Verify account is not linked to a previously processed account with a
@@ -117,10 +126,8 @@ class UnifiedAccounts {
 
     // If there is an existing account, merge it and return the merged account
     if (emailAccountRef) {
-      const emailAccount = emailAccountRef.getAccount();
-      emailAccount.restore();
-      emailAccount.merge(account);
-      emailAccount.save();
+      const emailAccount = await emailAccountRef.mergeAccount(account);
+      this.pendingAccountRefs.push(emailAccountRef);
       this.stormpathAccountIdMap[account.id] = emailAccountRef;
       this.addSchemaProperties(emailAccount);
       logger.info(`Merged account id=${account.id} email=${account.email} into linked account id=${emailAccountRef.id}`);
@@ -153,8 +160,10 @@ class UnifiedAccounts {
 
     logger.silly(`Adding new account id=${account.id}`);
     this.setMaps(accountRef);
-    account.save();
-    accountRef.save();
+
+    accountRef.setAccount(account);
+    this.pendingAccountRefs.push(accountRef);
+
     this.addSchemaProperties(account);
     this.processedLog.add(accountRef.id);
   }

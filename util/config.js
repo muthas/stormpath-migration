@@ -60,19 +60,19 @@ const config = yargs
       alias: 'f'
     },
     fileOpenLimit: {
-      description: 'Max number of files to read at any given time. Override if seeing an EMFILE error.',
+      description: 'Max number of files to read at any given time.',
       required: false,
-      default: 1000
-    },
-    checkpointLimit: {
-      description: 'Number of accounts to process before saving a checkpoint',
-      required: false,
-      default: 10000
+      default: 100
     },
     checkpointDir: {
       description: 'Directory to save checkpoint files to',
       required: false,
-      default: path.resolve(__dirname, '../tmp')
+      default: path.resolve(process.cwd(), 'tmp')
+    },
+    checkpointProgressLimit: {
+      description: 'Number of accounts to process before logging progress message',
+      required: false,
+      default: 10000
     },
     logLevel: {
       description: 'Logging level',
@@ -91,6 +91,10 @@ const config = yargs
   })
   .version()
   .argv;
+
+if (config.stormPathBaseDir.endsWith('/')) {
+  config.stormPathBaseDir = config.stormPathBaseDir.slice(0, -1);
+}
 
 config.isCustomDataFlatten = config.customData === 'flatten';
 config.isCustomDataStringify = config.customData === 'stringify';

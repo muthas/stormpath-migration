@@ -10,6 +10,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
+const Promise = require('bluebird');
 const Account = require('./account');
 const JsonCheckpoint = require('../util/checkpoint').JsonCheckpoint;
 
@@ -27,16 +28,42 @@ class AccountRef extends JsonCheckpoint {
     };
   }
 
-  getAccount() {
+  // A pointer to the account is set during introspect, and is destroyed
+  // when the accountRef is saved in a checkpoint. It's saved as a Promise
+  // because merges can happen asynchronously - the Promise guarantees that
+  // the account is only loaded once per checkpoint, and merges happen
+  // sequentially.
+  setAccount(account) {
+    this.accountP = Promise.resolve(account);
+  }
+
+  // Note: The accountP pointer is *not* saved here because any lookup after
+  // the introspect phase should not maintain the reference (eats up memory).
+  async getAccount() {
+    if (this.accountP) {
+      return this.accountP;
+    }
     const account = new Account(this.accountFilePath);
-    account.restore();
+    await account.restore();
     return account;
   }
 
-  async getAccountAsync() {
-    const account = new Account(this.accountFilePath);
-    await account.restoreAsync();
+  async mergeAccount(accountToMerge) {
+    if (!this.accountP) {
+      this.accountP = this.getAccount();
+    }
+    const account = await this.accountP;
+    account.merge(accountToMerge);
     return account;
+  }
+
+  async save() {
+    await super.save();
+    if (this.accountP) {
+      const account = await this.accountP;
+      await account.save();
+      delete this.accountP;
+    }
   }
 
 }

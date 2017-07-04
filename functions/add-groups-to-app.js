@@ -9,7 +9,7 @@
  *
  * See the License for the specific language governing permissions and limitations under the License.
  */
-const ConcurrencyPool = require('../util/concurrency-pool');
+const { each } = require('../util/concurrency');
 const ApiError = require('../util/api-error');
 const config = require('../util/config');
 const rs = require('../util/request-scheduler');
@@ -17,8 +17,7 @@ const logger = require('../util/logger');
 
 async function addGroupsToApp(appInstanceId, groupIds) {
   logger.verbose(`Adding groupIds=${groupIds} to appInstanceId=${appInstanceId}`);
-  const pool = new ConcurrencyPool(config.concurrencyLimit);
-  return pool.each(groupIds, async (groupId) => {
+  return each(groupIds, async (groupId) => {
     logger.verbose(`Adding groupId=${groupId} to appInstanceId=${appInstanceId}`);
     try {
       await rs.put({ url: `/api/v1/apps/${appInstanceId}/groups/${groupId}` });
@@ -26,7 +25,7 @@ async function addGroupsToApp(appInstanceId, groupIds) {
     } catch (err) {
       logger.error(new ApiError(`Failed to assign groupId=${groupId} to appInstanceId=${appInstanceId}`, err));
     }
-  });
+  }, config.concurrencyLimit);
 }
 
 module.exports = addGroupsToApp;

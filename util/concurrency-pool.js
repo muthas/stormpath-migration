@@ -9,7 +9,6 @@
  *
  * See the License for the specific language governing permissions and limitations under the License.
  */
-const allSettled = require('./all-settled');
 
 function releaseFrom(pool) {
   return function () {
@@ -47,28 +46,6 @@ class ConcurrencyPool {
       reject
     });
     return promise;
-  }
-
-  each(list, fn) {
-    return allSettled(list.map(async (item) => {
-      const resource = await this.acquire();
-      try {
-        const res = await fn(item);
-        resource.release();
-        return res;
-      } catch (e) {
-        this.pending.forEach(item => item.reject());
-        throw e;
-      }
-    }));
-  }
-
-  async mapToObject(list, fn) {
-    const map = {};
-    await this.each(list, (item) => {
-      return fn(item, map);
-    });
-    return map;
   }
 
 }

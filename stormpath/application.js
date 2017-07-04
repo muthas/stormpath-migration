@@ -9,8 +9,10 @@
  *
  * See the License for the specific language governing permissions and limitations under the License.
  */
+const Promise = require('bluebird');
 const parseIsoDuration = require('parse-iso-duration');
 const fs = require('fs');
+const readFile = Promise.promisify(fs.readFile);
 const Base = require('./base');
 const logger = require('../util/logger');
 const config = require('../util/config');
@@ -24,7 +26,7 @@ function isoToMin(isoDuration) {
   return Math.floor(ms / 1000 / 60);
 }
 
-function loadOAuthPolicy(application) {
+async function loadOAuthPolicy(application) {
   const oktaPolicy = {
     accessTokenLifetimeMinutes: 60, // 1 hour
     refreshTokenLifetimeMinutes: 144000, // 100 days
@@ -44,7 +46,8 @@ function loadOAuthPolicy(application) {
 
   try {
     logger.verbose(`Loading oAuthPolicy id=${policyId} for applicationId=${application.id}`);
-    const policy = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const content = await readFile(filePath, 'utf8');
+    const policy = JSON.parse(content);
 
     if (policy.idTokenTtL !== 'PT0H' && policy.idTokenTtl !== 'PT1H') {
       warn(policy, 'Okta ID Token lifetime is fixed to 1 hour');
@@ -61,8 +64,8 @@ function loadOAuthPolicy(application) {
 
 class Application extends Base {
 
-  initializeFromExport() {
-    this.tokenLimits = loadOAuthPolicy(this);
+  async initializeFromExport() {
+    this.tokenLimits = await loadOAuthPolicy(this);
   }
 
 }
