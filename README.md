@@ -122,21 +122,35 @@ Max number of concurrent transactions. Defaults to `30`.
 
 #### `--maxFiles (-f)`
 
-Max number of files to parse per directory. Use to preview the entire import.
+Max number of files to parse per directory. You can use this to preview a large import. For example, if you set the argument `--maxFiles 50`, the import tool will only run for the first 50 accounts, groups, directories, and other stormpath objects that are imported.
+
+- Example: `--maxFiles 50`
 
 #### `--checkpointDir`
 
-When the import script starts, it tries to map the Stormpath data model to the Okta model - for example, finding all unique custom schema attributes in the Account objects, or mapping linked Accounts to the same Okta user. For large exports, this can take a long time and sometimes cause memory issues.
+When the import script starts, it tries to map the Stormpath data model to the Okta model - for example, finding all unique custom schema attributes in the Account objects, or mapping linked Accounts to the same Okta user. For large exports, this can take a long time and sometime cause CPU or memory issues.
 
-This state is saved incrementally to the `--checkpointDir`, which defaults to `{stormpath-migration}/tmp`. If there are errors that cause the import script to fail, you can just re-run the script. It will load this incremental state from the checkpoint directory, and skip the introspection work that completed on the previous run.
+Incremental import state is saved to the `--checkpointDir`, which defaults to `{cwd}/tmp`. If the import script is stopped, it will load this incremental state on the next run.
 
-#### `--checkpointLimit`
+**Note**, when running from a saved state, warnings and messages from previous runs will not be written to the console. Output from previous runs is stored in the `logs` directory.
 
-The number of accounts to process before saving the current state to the `--checkpointDir`. This defaults to `10000`, which means that for every 10,000 accounts that are processed, a checkpoint is saved to the checkpoint directory.
+- Example: `--checkpointDir /Users/me/tmp`
+
+#### `--checkpointProgressLimit`
+
+The number of accounts to process before logging a progress message to the console. This value is only used during the initial phase of the import, when the import tool introspects the Stormpath export data.
+
+If you are working with a large export, you may want to increase this limit to reduce the number of messages that are logged to the console. The default value is `10000`.
+
+- Example: `--checkpointProgressLimit 50000`
 
 #### `--fileOpenLimit`
 
-Max number of files to read in parallel. We use this to limit how many files we open at a given time from the export directory. You should normally not need to override this option unless you see an [EMFILE](https://nodejs.org/api/errors.html#errors_common_system_errors) error in the error logs. Defaults to `1000`.
+Max number of files to read concurrently from the Stormpath export directory. For large exports, you may want to raise this limit to increase thoroughput in processing the Stormpath export files.
+
+**Note**, raising this limit will increase the CPU and memory usage of the import tool. Defaults to `100`.
+
+- Example: `--fileOpenLimit 1000`
 
 #### `--logLevel (-l)`
 

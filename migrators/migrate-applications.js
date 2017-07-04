@@ -98,7 +98,7 @@ async function migrateApplications() {
   logger.header('Starting applications import');
   cache.accountStoreMap = await getAccountStoreMap();
 
-  const applications = stormpathExport.getApplications();
+  const applications = await stormpathExport.getApplications();
 
   logger.info(`Importing ${applications.length} applications`);
 

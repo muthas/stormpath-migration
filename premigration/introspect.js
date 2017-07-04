@@ -14,10 +14,10 @@ const UnifiedAccounts = require('../stormpath/unified-accounts');
 const config = require('../util/config');
 const stormpathExport = require('../stormpath/stormpath-export');
 const cache = require('../migrators/util/cache');
-
+const { batch } = require('../util/concurrency');
 
 async function getDirectoryProviders() {
-  const directories = stormpathExport.getDirectories();
+  const directories = await stormpathExport.getDirectories();
   logger.info(`Mapping ${directories.length} directories to providerIds`);
   return directories.mapToObject((directory, map) => {
     map[directory.id] = directory.provider.providerId;
@@ -34,46 +34,48 @@ async function introspect() {
   const directoryProviders = await getDirectoryProviders();
   const accountLinks = await stormpathExport.getAccountLinks();
   const unifiedAccounts = new UnifiedAccounts(accountLinks);
-  let totalCount = 0;
   let numADLDAPAccounts = 0;
   let numUnverified = 0;
 
   const skipAccounts = await unifiedAccounts.restore();
   const accounts = await stormpathExport.getAccounts(skipAccounts);
+  const totalAccounts = accounts.length;
+  let nextProgressPoint = config.checkpointProgressLimit;
 
   logger.info(`Pre-processing ${accounts.length} stormpath accounts`);
-  await accounts.each((account) => {
-    try {
-      const providerId = directoryProviders[account.directory.id];
-      if (!providerId) {
-        unifiedAccounts.discardAccount(account);
-        return logger.error(`Missing directory id=${account.directory.id}. Skipping account id=${account.id}.`);
-      }
-      if (providerId === 'ad' || providerId === 'ldap') {
-        numADLDAPAccounts++;
-        unifiedAccounts.discardAccount(account);
-        return logger.verbose(`Skipping account id=${account.id}. Import using the Okta ${providerId.toUpperCase()} agent.`);
-      }
-      if (account.status === 'UNVERIFIED') {
-        numUnverified++;
-        unifiedAccounts.discardAccount(account);
-        return logger.verbose(`Skipping unverified account id=${account.id}`);
-      }
+  await accounts.batch(
+    async (account) => {
+      try {
+        const providerId = directoryProviders[account.directory.id];
+        if (!providerId) {
+          unifiedAccounts.discardAccount(account);
+          return logger.error(`Missing directory id=${account.directory.id}. Skipping account id=${account.id}.`);
+        }
+        if (providerId === 'ad' || providerId === 'ldap') {
+          numADLDAPAccounts++;
+          unifiedAccounts.discardAccount(account);
+          return logger.verbose(`Skipping account id=${account.id}. Import using the Okta ${providerId.toUpperCase()} agent.`);
+        }
+        if (account.status === 'UNVERIFIED') {
+          numUnverified++;
+          unifiedAccounts.discardAccount(account);
+          return logger.verbose(`Skipping unverified account id=${account.id}`);
+        }
 
-      unifiedAccounts.addAccount(account);
-
-      totalCount++;
-      if (totalCount % config.checkpointLimit === 0) {
-        logger.info(`Saving checkpoint after processing ${totalCount} accounts`);
-        unifiedAccounts.save();
+        await unifiedAccounts.addAccount(account);
+      } catch (err) {
+        logger.error(err);
       }
-    } catch (err) {
-      logger.error(err);
+    },
+    async (numProcessed) => {
+      if (numProcessed >= nextProgressPoint || numProcessed === totalAccounts) {
+        const percent = Math.round(numProcessed / totalAccounts * 100);
+        logger.info(`-- Processed ${numProcessed} accounts (${percent}%) --`);
+        nextProgressPoint += config.checkpointProgressLimit;
+      }
+      await unifiedAccounts.save();
     }
-  });
-
-  // Save any remaining accounts to the checkpoint
-  unifiedAccounts.save();
+  );
 
   if (numADLDAPAccounts > 0) {
     logger.warn(`Skipped ${numADLDAPAccounts} AD or LDAP accounts. Import using the Okta AD or LDAP agent.`);

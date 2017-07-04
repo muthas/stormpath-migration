@@ -126,7 +126,7 @@ async function migrateDirectory(directory) {
 async function migrateDirectories() {
   logger.header('Starting directories import');
   try {
-    const directories = stormpathExport.getDirectories();
+    const directories = await stormpathExport.getDirectories();
     logger.info(`Importing ${directories.length} directories`);
     await directories.each(migrateDirectory, { limit: 1 });
   } catch (err) {

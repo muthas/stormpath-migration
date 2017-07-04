@@ -16,8 +16,19 @@ const fs = require('fs-extra');
 const config = require('./config');
 const readFile = Promise.promisify(fs.readFile);
 const writeFile = Promise.promisify(fs.writeFile);
-const ConcurrencyPool = require('./concurrency-pool');
+const appendFile = Promise.promisify(fs.appendFile);
+const { each } = require('./concurrency');
 const { info } = require('./logger');
+
+// Cache lookups for directory existence to reduce file i/o
+const dirMap = new Map();
+async function ensureDir(dir) {
+  if (dirMap.get(dir)) {
+    return;
+  }
+  await fs.ensureDir(dir);
+  dirMap.set(dir, true);
+}
 
 class BaseCheckpoint {
 
@@ -35,15 +46,7 @@ class BaseCheckpoint {
     );
   }
 
-  readFile() {
-    const filePath = this.getCheckpointPath();
-    if (!fs.existsSync(filePath)) {
-      return this.parseFile(null);
-    }
-    return this.parseFile(fs.readFileSync(filePath, 'utf8'));
-  }
-
-  async readFileAsync() {
+  async readFile() {
     const filePath = this.getCheckpointPath();
     try {
       const content = await readFile(filePath, 'utf8');
@@ -53,28 +56,16 @@ class BaseCheckpoint {
     }
   }
 
-  writeFile(content) {
+  async writeFile(content) {
     const filePath = this.getCheckpointPath();
-    fs.ensureDirSync(path.dirname(filePath));
-    fs.writeFileSync(filePath, content);
-  }
-
-  async writeFileAsync(content) {
-    const filePath = this.getCheckpointPath();
-    await fs.ensureDir(path.dirname(filePath));
+    await ensureDir(path.dirname(filePath));
     await writeFile(filePath, content);
   }
 
-  appendFile(content) {
+  async appendFile(content) {
     const filePath = this.getCheckpointPath();
-    fs.ensureDirSync(path.dirname(filePath));
-
-    if (fs.existsSync(filePath)) {
-      fs.appendFileSync(filePath, '\n' + content);
-    }
-    else {
-      fs.writeFileSync(filePath, content);
-    }
+    await ensureDir(path.dirname(filePath));
+    await appendFile(filePath, content);
   }
 
 }
@@ -101,22 +92,13 @@ class JsonCheckpoint extends BaseCheckpoint {
     return props;
   }
 
-  save() {
+  async save() {
     const props = this.getProperties();
-    this.writeFile(JSON.stringify(props, null, 2));
+    await this.writeFile(JSON.stringify(props, null, 2));
   }
 
-  async saveAsync() {
-    const props = this.getProperties();
-    await this.writeFileAsync(JSON.stringify(props, null, 2));
-  }
-
-  restore() {
-    this.setProperties(this.readFile());
-  }
-
-  async restoreAsync() {
-    const props = await this.readFileAsync();
+  async restore() {
+    const props = await this.readFile();
     this.setProperties(props);
   }
 
@@ -146,42 +128,28 @@ class LogCheckpoint extends BaseCheckpoint {
     return content ? content.split('\n') : [];
   }
 
-  save() {
-    this.appendFile(this.pendingItems.join('\n'));
+  async save() {
+    if (this.pendingItems.length === 0) {
+      return;
+    }
+    await this.appendFile(this.pendingItems.join('\n') + '\n');
     this.pendingItems = [];
   }
 
-  async processAsync(processFn, limit) {
+  async process(processFn, limit) {
     info(`Loading log checkpoint file ${this.path}`);
-    const items = await this.readFileAsync();
+    const items = await this.readFile();
     if (items.length === 0) {
       return;
     }
 
     info(`Processing ${items.length} log items`);
-    const pool = new ConcurrencyPool(limit);
-    await pool.each(items, async (item) => {
+    await each(items, async (item) => {
       if (!item) {
         return;
       }
       await processFn(item);
-    });
-  }
-
-  process(processFn) {
-    info(`Loading log checkpoint file ${this.path}`);
-    const items = this.readFile();
-    if (items.length === 0) {
-      return;
-    }
-
-    info(`Processing ${items.length} log items`);
-    for (let item of items) {
-      if (!item) {
-        continue;
-      }
-      processFn(item);
-    }
+    }, limit);
   }
 
 }

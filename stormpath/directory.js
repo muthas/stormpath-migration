@@ -9,7 +9,9 @@
  *
  * See the License for the specific language governing permissions and limitations under the License.
  */
+const Promise = require('bluebird');
 const fs = require('fs');
+const readFile = Promise.promisify(fs.readFile);
 const Base = require('./base');
 const logger = require('../util/logger');
 const config = require('../util/config');
@@ -72,7 +74,7 @@ function mapToOktaPolicy(directory, policy) {
   }
 }
 
-function loadPasswordPolicy(directory) {
+async function loadPasswordPolicy(directory) {
   if (!directory.passwordPolicy) {
     logger.verbose(`No passwordPolicy for directoryId=${directory.id}`);
     return;
@@ -81,14 +83,14 @@ function loadPasswordPolicy(directory) {
   const filePath = `${config.stormPathBaseDir}/passwordPolicies/${policyId}.json`;
   try {
     logger.verbose(`Loading passwordPolicy id=${policyId} for directoryId=${directory.id}`);
-    const policy = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    return mapToOktaPolicy(directory, policy);
+    const policy = await readFile(filePath, 'utf8');
+    return mapToOktaPolicy(directory, JSON.parse(policy));
   } catch (err) {
     logger.error(`Failed to read passwordPolicy id=${policyId} for directoryId=${directory.id}: ${err}`);
   }
 }
 
-function loadUserInfoMappingRules(directory) {
+async function loadUserInfoMappingRules(directory) {
   const mappings = [];
   if (!directory.provider.userInfoMappingRules) {
     logger.verbose(`No userInfoMappingRules for directoryId=${directory.id}`);
@@ -98,7 +100,8 @@ function loadUserInfoMappingRules(directory) {
   const filePath = `${config.stormPathBaseDir}/userInfoMappingRules/${directory.id}.json`;
   try {
     logger.verbose(`Loading userInfoMappingRules for directoryId=${directory.id}`);
-    const rules = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const content = await readFile(filePath, 'utf8');
+    const rules = JSON.parse(content);
     for (let item of rules.items) {
       for (let attribute of item.accountAttributes) {
         // Account attributes are mapped to custom user schema properties by:
@@ -120,9 +123,9 @@ function loadUserInfoMappingRules(directory) {
 
 class Directory extends Base {
 
-  initializeFromExport() {
-    this.passwordPolicy = loadPasswordPolicy(this);
-    this.attributeMappings = loadUserInfoMappingRules(this);
+  async initializeFromExport() {
+    this.passwordPolicy = await loadPasswordPolicy(this);
+    this.attributeMappings = await loadUserInfoMappingRules(this);
     if (this.provider.providerId === 'saml') {
       this.signingCert = this.provider.encodedX509SigningCert
         .replace('-----BEGIN CERTIFICATE-----\n', '')

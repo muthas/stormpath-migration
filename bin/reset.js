@@ -14,14 +14,12 @@
 const rs = require('../util/request-scheduler');
 const logger = require('../util/logger');
 const config = require('../util/config');
-const ConcurrencyPool = require('../util/concurrency-pool');
+const { each } = require('../util/concurrency');
 const ApiError = require('../util/api-error');
 
 logger.setLevel(config.logLevel);
 
 const AS_PATH = '/api/v1/authorizationServers';
-
-const pool = new ConcurrencyPool(config.concurrencyLimit);
 
 async function deleteCustomSchema() {
   logger.header('Deleting custom schema');
@@ -59,7 +57,7 @@ async function deleteGroups() {
   logger.header('Deleting groups');
   const groups = await rs.get('/api/v1/groups');
   logger.info(`Found ${groups.length} groups`);
-  return pool.each(groups, async (group) => {
+  return each(groups, async (group) => {
     if (group.type === 'BUILT_IN') {
       logger.info(`Skipping group id=${group.id} name=${group.profile.name}`);
       return;
@@ -70,15 +68,16 @@ async function deleteGroups() {
     } catch (err) {
       logger.error(new ApiError(`Error deleting group id=${group.id} name=${group.profile.name}`, err));
     }
-  });
+  }, config.concurrencyLimit);
 }
 
 async function deleteUsers() {
   logger.header(`Deleting users`);
   while(true) {
     const users = await rs.get(`/api/v1/users`);
-    logger.info(`Found ${users.length} users`);
-    const res = await pool.each(users, async (user) => {
+    const numUsers = users.length;
+    logger.info(`Found ${numUsers} users`);
+    await each(users, async (user) => {
       try {
         await rs.post(`/api/v1/users/${user.id}/lifecycle/deactivate`);
         await rs.delete(`/api/v1/users/${user.id}`);
@@ -86,10 +85,11 @@ async function deleteUsers() {
       } catch (err) {
         logger.error(new ApiError(`Error deleting user id=${user.id} login=${user.profile.login}`, err));
       }
-    });
+    }, config.concurrencyLimit);
+
     // Default (and max) limit for number of users returned is 200. If we have
     // less than 200, it means we've got the last set.
-    if (users.length < 200) {
+    if (numUsers < 200) {
       break;
     }
   }
@@ -100,16 +100,17 @@ async function deleteDeprovisionedUsers() {
   const filter = encodeURIComponent('status eq "DEPROVISIONED"');
   while (true) {
     const users = await rs.get(`/api/v1/users?filter=${filter}`);
-    logger.info(`Found ${users.length} deprovisioned users`);
-    const res = await pool.each(users, async (user) => {
+    const numUsers = users.length;
+    logger.info(`Found ${numUsers} deprovisioned users`);
+    await each(users, async (user) => {
       try {
         await rs.delete(`/api/v1/users/${user.id}`);
         logger.info(`Deleted user id=${user.id} login=${user.profile.login}`);
       } catch (err) {
         logger.error(new ApiError(`Error deleting user id=${user.id} login=${user.profile.login}`, err));
       }
-    });
-    if (users.length < 200) {
+    }, config.concurrencyLimit);
+    if (numUsers < 200) {
       break;
     }
   }
@@ -119,29 +120,28 @@ async function deleteClients() {
   logger.header('Deleting OAuth Clients');
   const clients = await rs.get('/oauth2/v1/clients');
   logger.info(`Found ${clients.length} clients`);
-  return pool.each(clients, async (client) => {
+  return each(clients, async (client) => {
     try {
       await rs.delete(`/oauth2/v1/clients/${client.client_id}`);
       logger.info(`Deleted client id=${client.client_id} name=${client.client_name}`);
     } catch (err) {
       logger.error(new ApiError(`Error deleting OAuth client id=${client.client_id} name=${client.client_name}`, err));
     }
-  });
+  }, config.concurrencyLimit);
 }
 
 async function deleteAuthorizationServers() {
   logger.header('Deleting authorization servers');
   const servers = await rs.get(AS_PATH);
   logger.info(`Found ${servers.length} authorization servers`);
-  const asPool = new ConcurrencyPool(1);
-  return asPool.each(servers, async (as) => {
+  return each(servers, async (as) => {
     try {
       await rs.delete(`${AS_PATH}/${as.id}`);
       logger.info(`Deleted authorization server id=${as.id} name=${as.name}`);
     } catch (err) {
       logger.error(new ApiError(`Error deleting authorization server id=${as.id} name=${as.name}`, err));
     }
-  });
+  }, 1);
 }
 
 async function deletePasswordPolicies() {
@@ -149,8 +149,7 @@ async function deletePasswordPolicies() {
   const policies = await rs.get('/api/v1/policies?type=PASSWORD');
   logger.info(`Found ${policies.length} password policies`);
   // Note: Get 500's when deleting multiple password policies concurrently
-  const policyPool = new ConcurrencyPool(1);
-  return policyPool.each(policies, async (policy) => {
+  return each(policies, async (policy) => {
     if (policy.system) {
       logger.info(`Skipping password policy id=${policy.id} name=${policy.name}`);
       return;
@@ -161,35 +160,35 @@ async function deletePasswordPolicies() {
     } catch (err) {
       logger.error(new ApiError(`Error deleting password policy id=${policy.id} name=${policy.name}`, err));
     }
-  });
+  }, 1);
 }
 
 async function deleteIdps() {
   logger.header('Deleting IDPs');
   const idps = await rs.get('/api/v1/idps');
   logger.info(`Found ${idps.length} IDPs`);
-  return pool.each(idps, async (idp) => {
+  return each(idps, async (idp) => {
     try {
       await rs.delete(`/api/v1/idps/${idp.id}`);
       logger.info(`Deleted IDP id=${idp.id} name=${idp.name} type=${idp.type}`);
     } catch (err) {
       logger.error(new ApiError(`Error deleting IDP id=${idp.id} name=${idp.name}`, err));
     }
-  });
+  }, config.concurrencyLimit);
 }
 
 async function deleteIdpKeys() {
   logger.header('Deleting IDP cert keys');
   const keys = await rs.get('/api/v1/idps/credentials/keys');
   logger.info(`Found ${keys.length} keys`);
-  return pool.each(keys, async (key) => {
+  return each(keys, async (key) => {
     try {
       await rs.delete(`/api/v1/idps/credentials/keys/${key.kid}`);
       logger.info(`Deleted IDP cert key kid=${key.kid}`);
     } catch (err) {
       logger.error(new ApiError(`Error deleting IDP cert key kid=${key.kid}`, err));
     }
-  });
+  }, config.concurrencyLimit);
 }
 
 async function reset() {

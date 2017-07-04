@@ -11,35 +11,42 @@
  */
 const Promise = require('bluebird');
 const fs = require('fs');
+const readdir = Promise.promisify(fs.readdir);
 const path = require('path');
-const ConcurrencyPool = require('../util/concurrency-pool');
+const { each, batch, mapToObject } = require('../util/concurrency');
 const readFile = Promise.promisify(fs.readFile);
 const config = require('../util/config');
+const { warn } = require('../util/logger');
 
 class FileIterator {
 
   constructor(dir, Klass, options, skipFiles = {}) {
-    if (!fs.existsSync(dir)) {
-      this.files = [];
-      return;
-    }
     this.dir = dir;
-
-    this.files = fs.readdirSync(dir, 'utf8').filter((file) => {
-      if (skipFiles[path.basename(file, '.json')]) {
-        return false;
-      }
-      if (file.endsWith('.json')) {
-        return true;
-      }
-    });
-
-    if (config.maxFiles) {
-      this.files = this.files.slice(0, config.maxFiles);
-    }
-
     this.Klass = Klass;
     this.options = options;
+    this.skipFiles = skipFiles;
+  }
+
+  async initialize() {
+    try {
+      const maxFiles = config.maxFiles || Infinity;
+      let fileCount = 0;
+      const files = await readdir(this.dir);
+
+      this.files = files.filter((file) => {
+        if (!file.endsWith('.json')) {
+          return false;
+        }
+        fileCount++;
+        if (this.skipFiles[path.basename(file, '.json')] || fileCount > maxFiles) {
+          return false;
+        }
+        return true;
+      });
+    } catch (e) {
+      warn(`Could not load ${this.dir}, skipping`);
+      this.files = [];
+    }
   }
 
   async readFile(file) {
@@ -47,26 +54,39 @@ class FileIterator {
     const contents = await readFile(filePath, 'utf8');
     const instance = new this.Klass(filePath);
     instance.setProperties(JSON.parse(contents));
-    instance.initializeFromExport(this.options);
+    await instance.initializeFromExport(this.options);
     return instance;
   }
 
   each(fn, options) {
     const limit = options && options.limit || config.fileOpenLimit;
-    const pool = new ConcurrencyPool(limit);
-    return pool.each(this.files, async (file) => {
+    return each(this.files, async (file) => {
       const instance = await this.readFile(file);
       return await fn(instance);
-    });
+    }, limit);
+  }
+
+  batch(evalFn, batchFn, options) {
+    const limit = options && options.limit || config.fileOpenLimit;
+    return batch(
+      this.files,
+      async (file) => {
+        const instance = await this.readFile(file);
+        await evalFn(instance);
+      },
+      async (numProcessed) => {
+        await batchFn(numProcessed);
+      },
+      limit
+    );
   }
 
   mapToObject(fn, options) {
     const limit = options && options.limit || config.fileOpenLimit;
-    const pool = new ConcurrencyPool(limit);
-    return pool.mapToObject(this.files, async (file, map) => {
+    return mapToObject(this.files, async (file, map) => {
       const instance = await this.readFile(file);
       return await fn(instance, map);
-    });
+    }, limit);
   }
 
   get length() {

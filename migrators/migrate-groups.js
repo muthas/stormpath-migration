@@ -38,7 +38,7 @@ async function migrateGroup(membershipMap, stormpathGroup) {
 async function migrateGroups() {
   logger.header('Starting groups import');
 
-  const stormpathGroups = stormpathExport.getGroups();
+  const stormpathGroups = await stormpathExport.getGroups();
   logger.info(`Importing ${stormpathGroups.length} groups`);
 
   const membershipMap = await stormpathExport.getGroupMembershipMap();
