@@ -42,6 +42,11 @@ class AccountLinks {
       this.links[rightAccountId] = rightRef;
     }
 
+    // Both accounts are already linked
+    if (leftRef === rightRef) {
+      return;
+    }
+
     // And then merge all accountIds from the right to the left, updating
     // all references to point to the left.
     for (let accountId of rightRef) {
