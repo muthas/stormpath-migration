@@ -122,7 +122,7 @@ Max number of concurrent transactions. Defaults to `30`.
 
 #### `--maxFiles (-f)`
 
-Max number of files to parse per directory. You can use this to preview a large import. For example, if you set the argument `--maxFiles 50`, the import tool will only run for the first 50 accounts, groups, directories, and other stormpath objects that are imported.
+Max number of files to parse per directory. You can use this to preview a large import. For example, if you set the argument `--maxFiles 50`, the import tool will only run for the first 50 accounts, groups, directories, and other Stormpath objects that are imported.
 
 - Example: `--maxFiles 50`
 
