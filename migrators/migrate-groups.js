@@ -17,7 +17,7 @@ const config = require('../util/config');
 const addUsersFromGroup = require('./util/add-users-from-group');
 const cache = require('./util/cache');
 
-async function migrateGroup(membershipMap, stormpathGroup) {
+async function migrateGroup(stormpathGroup) {
   const lg = logger.group(`Stormpath group id=${stormpathGroup.id} name=${stormpathGroup.name}`);
   try {
     const name = `group:${cache.directoryMap[stormpathGroup.directory.id]}:${stormpathGroup.name}`;
@@ -41,9 +41,7 @@ async function migrateGroups() {
   const stormpathGroups = await stormpathExport.getGroups();
   logger.info(`Importing ${stormpathGroups.length} groups`);
 
-  const membershipMap = await stormpathExport.getGroupMembershipMap();
-  const migrate = migrateGroup.bind(null, membershipMap);
-  return stormpathGroups.each(migrate, { limit: 1 });
+  return stormpathGroups.each(migrateGroup, { limit: 1 });
 }
 
 module.exports = migrateGroups;

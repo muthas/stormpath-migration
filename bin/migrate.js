@@ -12,6 +12,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 const Promise = require('bluebird');
+const v8 = require('v8');
 const introspect = require('../premigration/introspect');
 const logger = require('../util/logger');
 const config = require('../util/config');
@@ -26,6 +27,14 @@ const migrateOrganizations = require('../migrators/migrate-organizations');
 logger.setLevel(config.logLevel);
 logger.info(`Starting import...`);
 logger.info(`Writing log output to ${logger.logFile}`);
+
+// Show v8 heap limit. Example increasing to 4Gb:
+// node --max-old-space-size=4096 bin/migrate {{options}}
+//
+// Or, set it through the NODE_OPTIONS environment variable:
+// export NODE_OPTIONS=--max-old-space-size=4096
+const heapSize = Math.round(v8.getHeapStatistics().heap_size_limit / 1000000);
+logger.info(`Heap size limit: ${heapSize}Mb`);
 
 async function migrate() {
   try {

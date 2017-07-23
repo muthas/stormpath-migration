@@ -78,17 +78,10 @@ class StormpathExport {
     return groups;
   }
 
-  async getGroupMembershipMap() {
+  async getGroupMemberships() {
     const memberships = new FileIterator(`${this.baseDir}/groupMemberships`, Base);
     await memberships.initialize();
-    logger.verbose(`Mapping ${memberships.length} group memberships`);
-    return memberships.mapToObject((membership, map) => {
-      const groupId = membership.group.id;
-      if (!map[groupId]) {
-        map[groupId] = [];
-      }
-      map[groupId].push(membership.account.id);
-    });
+    return memberships;
   }
 
   async getOrganizations() {

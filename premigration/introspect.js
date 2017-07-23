@@ -11,6 +11,7 @@
  */
 const logger = require('../util/logger');
 const UnifiedAccounts = require('../stormpath/unified-accounts');
+const GroupMembershipMap = require('../stormpath/group-membership-map');
 const config = require('../util/config');
 const stormpathExport = require('../stormpath/stormpath-export');
 const cache = require('../migrators/util/cache');
@@ -107,6 +108,32 @@ async function introspect() {
   cache.customSchemaTypeMap = schema.schemaTypeMap;
 
   logger.info(`Found ${Object.keys(cache.customSchemaProperties).length} custom schema properties`);
+
+  const groupMembershipMap = new GroupMembershipMap();
+  logger.info('Loading Stormpath groupMembershipMap from checkpoint file');
+  await groupMembershipMap.restore();
+  if (groupMembershipMap.processed()) {
+    logger.info('Successfully loaded groupMembershipMap');
+  } else {
+    logger.info('No existing checkpoint file for groupMembershipMap');
+    const groupMemberships = await stormpathExport.getGroupMemberships();
+    const totalGroupMemberships = groupMemberships.length;
+    let nextMembershipCheckpoint = config.checkpointProgressLimit;
+    logger.info(`Pre-processing ${totalGroupMemberships} Stormpath group memberships`);
+    await groupMemberships.batch(
+      (membership) => groupMembershipMap.add(membership),
+      (numProcessed) => {
+        if (numProcessed >= nextMembershipCheckpoint || numProcessed === totalGroupMemberships) {
+          const percent = Math.round(numProcessed / totalGroupMemberships * 100);
+          logger.info(`-- Processed ${numProcessed} group memberships (${percent}%) --`);
+          nextMembershipCheckpoint += config.checkpointProgressLimit;
+        }
+      }
+    );
+    logger.info('Saving groupMembershipMap to checkpoint file');
+    await groupMembershipMap.save();
+  }
+  cache.groupMembershipMap = groupMembershipMap.getMembershipMap();
 }
 
 module.exports = introspect;
