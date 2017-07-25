@@ -53,7 +53,8 @@ function timeToNextRequest(res) {
   // Add an extra buffer of 1000ms
   const time = serverResetUtcMs - serverTimeUtcMs + 1000;
 
-  const msg = `Rate limit reached, scheduling next request in ${time}ms ${remaining}`;
+  const rateLimit = headers['x-rate-limit-limit'];
+  const msg = `Rate limit reached (${rateLimit}), scheduling next request in ${time}ms ${remaining}`;
   logger[remaining === 11 ? 'warn' : 'silly'](msg);
 
   return time;

@@ -159,6 +159,23 @@ Logging level. Defaults to `info`.
 - Options: `error`, `warn`, `info`, `verbose`, `debug`, `silly`
 - Example: `--logLevel verbose`
 
+### Node memory errors
+
+If you're working with a large export and get a `process out of memory` error, you can increase the limit by setting the `NODE_OPTIONS` environment variable:
+
+```bash
+# --max-old-space-size is in Megabytes. In this example, the limit is 4Gb.
+$ export NODE_OPTIONS=--max-old-space-size=4096
+```
+
+After starting the import, this memory limit is logged to the console:
+
+```bash
+[2017-07-23 18:50:29] INFO     Starting import...
+[2017-07-23 18:50:29] INFO     Writing log output to {{log_location}}
+[2017-07-23 18:50:29] INFO     Heap size limit: 4329Mb
+```
+
 ### Organization Reset
 
 If you need to run the import script again, but wish to start with a blank slate, this tool also provides a reset script that will remove all data from your org. The reset script takes the same arguments as the import script.

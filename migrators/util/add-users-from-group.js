@@ -15,9 +15,6 @@ const stormpathExport = require('../../stormpath/stormpath-export');
 const cache = require('./cache');
 
 async function addUsersFromGroup(stormpathGroupId) {
-  if (!cache.groupMembershipMap) {
-    cache.groupMembershipMap = await stormpathExport.getGroupMembershipMap();
-  }
   const oktaGroupId = cache.groupMap[stormpathGroupId];
   const accountIds = cache.groupMembershipMap[stormpathGroupId];
   if (!accountIds || accountIds.length === 0) {
