@@ -62,7 +62,7 @@ class AccountRef extends JsonCheckpoint {
     if (this.accountP) {
       const account = await this.accountP;
       await account.save();
-      delete this.accountP;
+      this.accountP = null;
     }
   }
 
