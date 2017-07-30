@@ -11,9 +11,15 @@
  */
 const Promise = require('bluebird');
 
-async function processList(list, fn) {
+function cancelEach(list) {
+  return () => {
+    list.length = 0;
+  };
+}
+
+async function processList(list, fn, cancelFn) {
   while (list.length > 0) {
-    await fn(list.shift());
+    await fn(list.shift(), cancelFn);
   }
 }
 
@@ -22,14 +28,19 @@ async function processList(list, fn) {
  * provided function. This function can be async, but must return a Promise to
  * signal when it is complete.
  *
+ * If an error should cancel any remaining operations, call the cancelFn to
+ * clear out the remainder of the list. If this is not called, list processing
+ * will continue processing in the background.
+ *
  * @param {array} list
  * @param {function} fn
  * @param {number} limit
  */
 async function each(list, fn, limit) {
   const promises = [];
+  const cancelFn = cancelEach(list);
   for (let i = 0; i < limit; i++) {
-    promises.push(processList(list, fn));
+    promises.push(processList(list, fn, cancelFn));
   }
   await Promise.all(promises);
 }

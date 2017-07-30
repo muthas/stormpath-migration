@@ -21,7 +21,7 @@ async function migrateAccounts() {
   const accountRefs = cache.unifiedAccounts.getAccounts();
   logger.info(`Importing ${accountRefs.length} unified Stormpath accounts`);
   try {
-    await each(accountRefs, async (accountRef) => {
+    await each(accountRefs, async (accountRef, cancel) => {
       try {
         const account = await accountRef.getAccount();
         const user = await createOktaUser(
@@ -41,6 +41,7 @@ async function migrateAccounts() {
       } catch (err) {
         logger.error(err);
         if (err.message.includes('Maximum number of users has been reached')) {
+          cancel();
           throw new Error('Reached maximum number of users - contact support to raise this limit');
         }
       }
