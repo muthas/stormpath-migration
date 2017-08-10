@@ -43,7 +43,7 @@ async function getOrganizationAccountStoreMap() {
 }
 
 async function addUsersFromOrganization(orgId) {
-  if (!cache.organizationAccountStoreMappings) {
+  if (!cache.organizationAccountStoreMap) {
     cache.organizationAccountStoreMap = await getOrganizationAccountStoreMap();
   }
 
