@@ -37,10 +37,11 @@ async function processList(list, fn, cancelFn) {
  * @param {number} limit
  */
 async function each(list, fn, limit) {
+  const clone = list.slice();
   const promises = [];
   const cancelFn = cancelEach(list);
   for (let i = 0; i < limit; i++) {
-    promises.push(processList(list, fn, cancelFn));
+    promises.push(processList(clone, fn, cancelFn));
   }
   await Promise.all(promises);
 }
